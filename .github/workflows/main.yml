@@ -1,0 +1,81 @@
+name: Build All
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Unpack bundle
+        run: |
+          python3 - <<'EOF'
+          import os, re
+          cur = None
+          buf = []
+          def flush():
+              if cur:
+                  os.makedirs(os.path.dirname(cur) or '.', exist_ok=True)
+                  open(cur, 'w', encoding='utf-8').write(''.join(buf))
+          for line in open('bundle.txt', encoding='utf-8'):
+              m = re.match(r'^#### FILE: (.+?)\s*$', line)
+              if m:
+                  flush()
+                  cur = m.group(1)
+                  buf = []
+              else:
+                  buf.append(line)
+          flush()
+          EOF
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build Debug APK + Release APK + AAB
+        run: gradle assembleDebug assembleRelease bundleRelease --no-daemon --stacktrace
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+
+      - name: Sign Release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          cd app/build/outputs/apk/release
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > ks.jks
+            ALIAS="$KEY_ALIAS"; PASS="$KEY_PASSWORD"
+          else
+            ALIAS="smartplayer"; PASS="smartplayer123"
+            keytool -genkeypair -v -keystore ks.jks -alias $ALIAS \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass $PASS -keypass $PASS \
+              -dname "CN=Smart Player, O=SmartPlayer, C=BD"
+          fi
+          $BT/zipalign -p -f 4 app-release-unsigned.apk aligned.apk
+          $BT/apksigner sign --ks ks.jks --ks-pass pass:$PASS \
+            --key-pass pass:$PASS --ks-key-alias $ALIAS \
+            --out SmartPlayer-release.apk aligned.apk
+
+      - name: Collect outputs
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/*.apk out/SmartPlayer-debug.apk
+          cp app/build/outputs/apk/release/SmartPlayer-release.apk out/
+          cp app/build/outputs/bundle/release/*.aab out/SmartPlayer-release.aab
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartPlayer-all
+          path: out/*
