@@ -17,14 +17,16 @@ jobs:
       - name: Unpack bundle
         run: |
           python3 - <<'EOF'
-          import os, re
+          import os, re, glob
+          files = sorted(glob.glob('bundle*.txt'))
+          print("Using:", files)
           cur = None
           buf = []
           def flush():
               if cur:
                   os.makedirs(os.path.dirname(cur) or '.', exist_ok=True)
                   open(cur, 'w', encoding='utf-8').write(''.join(buf))
-          for line in open('bundle.txt', encoding='utf-8'):
+          for line in open(files[-1], encoding='utf-8'):
               m = re.match(r'^#### FILE: (.+?)\s*$', line)
               if m:
                   flush()
