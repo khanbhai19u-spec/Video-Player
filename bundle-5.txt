@@ -1,0 +1,1224 @@
+#### FILE: settings.gradle.kts
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "SmartPlayer"
+include(":app")
+#### FILE: build.gradle.kts
+plugins {
+    id("com.android.application") version "8.5.2" apply false
+    id("org.jetbrains.kotlin.android") version "2.0.20" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.20" apply false
+}
+#### FILE: gradle.properties
+org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+android.useAndroidX=true
+kotlin.code.style=official
+android.nonTransitiveRClass=true
+#### FILE: app/build.gradle.kts
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+
+fun env(name: String, default: String): String =
+    System.getenv(name)?.takeIf { it.isNotBlank() } ?: default
+
+android {
+    namespace = "com.smartplayer.app"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.smartplayer.app"
+        minSdk = 24
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0.0"
+        // GitHub Secrets / Variables থেকে আসবে
+        buildConfigField("String", "API_BASE_URL", "\"${env("API_BASE_URL", "https://example.com/api/")}\"")
+        buildConfigField("String", "API_KEY", "\"${env("API_KEY", "")}\"")
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
+
+    buildTypes {
+        release { isMinifyEnabled = false }
+    }
+}
+
+dependencies {
+    implementation(platform("androidx.compose:compose-bom:2024.09.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.core:core-ktx:1.13.1")
+
+    val media3 = "1.4.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3")
+    implementation("androidx.media3:media3-exoplayer-dash:$media3")
+    implementation("androidx.media3:media3-ui:$media3")
+    implementation("androidx.media3:media3-session:$media3")
+    implementation("com.google.guava:guava:33.3.1-android")
+
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-video:2.7.0")
+}
+#### FILE: app/src/main/AndroidManifest.xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
+        android:label="Smart Player"
+        android:theme="@style/Theme.SmartPlayer"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".service.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
+#### FILE: app/src/main/res/values/themes.xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SmartPlayer" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
+#### FILE: app/src/main/res/drawable/ic_launcher.xml
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#0B0B0D" android:pathData="M0,0h108v108h-108z" />
+    <path android:fillColor="#FF8A00" android:pathData="M30,26 L84,54 L30,82 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M42,40 L68,54 L42,68 Z" />
+</vector>
+#### FILE: app/src/main/java/com/smartplayer/app/data/Store.kt
+package com.smartplayer.app.data
+
+import android.content.Context
+
+data class PlayItem(val uri: String, val title: String)
+
+/** Intent extra-এর size limit এড়াতে playlist এখানে রাখা হয়েছে */
+object Playlist {
+    var items: List<PlayItem> = emptyList()
+    var index: Int = 0
+}
+
+object Prefs {
+    private fun sp(c: Context) = c.getSharedPreferences("smart_player", Context.MODE_PRIVATE)
+
+    fun savePos(c: Context, uri: String, pos: Long, dur: Long) {
+        val v = if (dur > 0 && pos > dur - 5000) 0L else pos
+        sp(c).edit().putLong("pos_" + uri.hashCode(), v).apply()
+    }
+
+    fun getPos(c: Context, uri: String): Long = sp(c).getLong("pos_" + uri.hashCode(), 0L)
+}
+
+fun fmt(ms: Long): String {
+    val s = (ms.coerceAtLeast(0)) / 1000
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val sec = s % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%02d:%02d".format(m, sec)
+}
+#### FILE: app/src/main/java/com/smartplayer/app/data/Api.kt
+package com.smartplayer.app.data
+
+import com.smartplayer.app.BuildConfig
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.GET
+
+data class OnlineVideo(
+    val id: String? = null,
+    val title: String = "",
+    val url: String = "",
+    val thumbnail: String? = null,
+    val duration: Long? = null
+)
+
+interface SmartApi {
+    /** GET {API_BASE_URL}videos  ->  [ {title, url, thumbnail, duration}, ... ] */
+    @GET("videos")
+    suspend fun videos(): List<OnlineVideo>
+}
+
+object ApiClient {
+    val api: SmartApi by lazy {
+        val key = BuildConfig.API_KEY
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val b = chain.request().newBuilder()
+            if (key.isNotBlank()) {
+                b.addHeader("X-API-Key", key)
+                b.addHeader("Authorization", "Bearer $key")
+            }
+            chain.proceed(b.build())
+        }.build()
+        val base = BuildConfig.API_BASE_URL.let { if (it.endsWith("/")) it else "$it/" }
+        Retrofit.Builder()
+            .baseUrl(base)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(SmartApi::class.java)
+    }
+}
+#### FILE: app/src/main/java/com/smartplayer/app/data/LocalVideos.kt
+package com.smartplayer.app.data
+
+import android.content.ContentUris
+import android.content.Context
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+
+data class LocalVideo(
+    val id: Long,
+    val title: String,
+    val uri: Uri,
+    val duration: Long,
+    val size: Long,
+    val folder: String
+)
+
+object LocalVideos {
+    fun load(ctx: Context): List<LocalVideo> {
+        val out = mutableListOf<LocalVideo>()
+        val collection = if (Build.VERSION.SDK_INT >= 29)
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val proj = arrayOf(
+            MediaStore.Video.Media._ID,
+            MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.DURATION,
+            MediaStore.Video.Media.SIZE,
+            MediaStore.Video.Media.BUCKET_DISPLAY_NAME
+        )
+        ctx.contentResolver.query(
+            collection, proj, null, null,
+            "${MediaStore.Video.Media.DATE_ADDED} DESC"
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                out += LocalVideo(
+                    id = id,
+                    title = c.getString(1) ?: "Video",
+                    uri = ContentUris.withAppendedId(collection, id),
+                    duration = c.getLong(2),
+                    size = c.getLong(3),
+                    folder = c.getString(4) ?: ""
+                )
+            }
+        }
+        return out
+    }
+}
+#### FILE: app/src/main/java/com/smartplayer/app/service/PlaybackService.kt
+package com.smartplayer.app.service
+
+import android.content.Intent
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
+
+/** Player এখানে থাকে, তাই Background play / Play as audio কাজ করে */
+class PlaybackService : MediaSessionService() {
+    private var session: MediaSession? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        val player = ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .setSeekBackIncrementMs(10_000)
+            .setSeekForwardIncrementMs(10_000)
+            .build()
+        session = MediaSession.Builder(this, player).build()
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val p = session?.player
+        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) stopSelf()
+    }
+
+    override fun onDestroy() {
+        session?.run {
+            player.release()
+            release()
+        }
+        session = null
+        super.onDestroy()
+    }
+}
+#### FILE: app/src/main/java/com/smartplayer/app/ui/Theme.kt
+package com.smartplayer.app.ui
+
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+
+val Orange = Color(0xFFFF8A00)
+
+@Composable
+fun SmartTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Orange,
+            onPrimary = Color.Black,
+            background = Color(0xFF0B0B0D),
+            surface = Color(0xFF16171B),
+            surfaceVariant = Color(0xFF1F2026),
+            onBackground = Color.White,
+            onSurface = Color.White
+        ),
+        content = content
+    )
+}
+#### FILE: app/src/main/java/com/smartplayer/app/MainActivity.kt
+package com.smartplayer.app
+
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import coil.ImageLoader
+import coil.compose.AsyncImage
+import coil.decode.VideoFrameDecoder
+import com.smartplayer.app.data.ApiClient
+import com.smartplayer.app.data.LocalVideo
+import com.smartplayer.app.data.LocalVideos
+import com.smartplayer.app.data.OnlineVideo
+import com.smartplayer.app.data.PlayItem
+import com.smartplayer.app.data.Playlist
+import com.smartplayer.app.data.fmt
+import com.smartplayer.app.ui.Orange
+import com.smartplayer.app.ui.SmartTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent { SmartTheme { HomeScreen() } }
+    }
+}
+
+private fun play(ctx: Context, items: List<PlayItem>, index: Int) {
+    Playlist.items = items
+    Playlist.index = index
+    ctx.startActivity(Intent(ctx, PlayerActivity::class.java))
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen() {
+    val ctx = LocalContext.current
+    val perm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO
+    else Manifest.permission.READ_EXTERNAL_STORAGE
+
+    var tab by remember { mutableIntStateOf(0) }
+    var granted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(ctx, perm) == PackageManager.PERMISSION_GRANTED)
+    }
+    var videos by remember { mutableStateOf(listOf<LocalVideo>()) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
+    val loader = remember {
+        ImageLoader.Builder(ctx).components { add(VideoFrameDecoder.Factory()) }.crossfade(true).build()
+    }
+
+    LaunchedEffect(granted) {
+        if (granted) videos = withContext(Dispatchers.IO) { LocalVideos.load(ctx) }
+        else launcher.launch(perm)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row {
+                        Text("Smart ", fontWeight = FontWeight.ExtraBold)
+                        Text("Player", fontWeight = FontWeight.ExtraBold, color = Orange)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            )
+        },
+        bottomBar = {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                val tabs = listOf("Local" to Icons.Filled.VideoLibrary, "Online" to Icons.Filled.Cloud, "Network" to Icons.Filled.Link)
+                tabs.forEachIndexed { i, (label, icon) ->
+                    NavigationBarItem(
+                        selected = tab == i,
+                        onClick = { tab = i },
+                        icon = { Icon(icon, label) },
+                        label = { Text(label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color.Black,
+                            indicatorColor = Orange,
+                            selectedTextColor = Orange
+                        )
+                    )
+                }
+            }
+        }
+    ) { pad ->
+        Box(Modifier.padding(pad).fillMaxSize()) {
+            when (tab) {
+                0 -> LocalTab(videos, granted, loader) { launcher.launch(perm) }
+                1 -> OnlineTab(loader)
+                else -> NetworkTab()
+            }
+        }
+    }
+}
+
+@Composable
+fun LocalTab(videos: List<LocalVideo>, granted: Boolean, loader: ImageLoader, onGrant: () -> Unit) {
+    val ctx = LocalContext.current
+    var query by remember { mutableStateOf("") }
+    if (!granted) {
+        Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
+            Text("ভিডিও দেখতে permission দিন")
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onGrant) { Text("Grant permission") }
+        }
+        return
+    }
+    val filtered = remember(videos, query) {
+        if (query.isBlank()) videos else videos.filter { it.title.contains(query, true) }
+    }
+    Column(Modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            singleLine = true,
+            placeholder = { Text("Search videos") },
+            leadingIcon = { Icon(Icons.Filled.Search, null) },
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp)
+        )
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(filtered.size) { i ->
+                val v = filtered[i]
+                VideoRow(
+                    title = v.title,
+                    sub = "${fmt(v.duration)} • ${v.size / 1_048_576} MB • ${v.folder}",
+                    model = v.uri,
+                    loader = loader
+                ) {
+                    play(ctx, filtered.map { PlayItem(it.uri.toString(), it.title) }, i)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OnlineTab(loader: ImageLoader) {
+    val ctx = LocalContext.current
+    var list by remember { mutableStateOf<List<OnlineVideo>?>(null) }
+    var err by remember { mutableStateOf<String?>(null) }
+    var reload by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(reload) {
+        err = null
+        list = null
+        try {
+            list = ApiClient.api.videos()
+        } catch (e: Exception) {
+            err = e.message ?: "Error"
+        }
+    }
+
+    Box(Modifier.fillMaxSize(), Alignment.Center) {
+        when {
+            err != null -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                Text("API error: $err", color = Color.Gray)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { reload++ }) { Text("Retry") }
+            }
+            list == null -> CircularProgressIndicator(color = Orange)
+            else -> {
+                val l = list!!
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(l.size) { i ->
+                        val v = l[i]
+                        VideoRow(v.title, v.duration?.let { fmt(it) } ?: "Online", v.thumbnail, loader) {
+                            play(ctx, l.filter { it.url.isNotBlank() }.map { PlayItem(it.url, it.title) }, i)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NetworkTab() {
+    val ctx = LocalContext.current
+    var url by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Network Stream", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Spacer(Modifier.height(4.dp))
+        Text("mp4 / mkv / m3u8 (HLS) / mpd (DASH) লিংক দিন", color = Color.Gray, fontSize = 13.sp)
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = url, onValueChange = { url = it },
+            placeholder = { Text("https://...") },
+            singleLine = true, modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = {
+                val u = url.trim()
+                if (u.isNotEmpty()) play(ctx, listOf(PlayItem(u, u.substringAfterLast('/').ifBlank { u })), 0)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Play") }
+    }
+}
+
+@Composable
+fun VideoRow(title: String, sub: String, model: Any?, loader: ImageLoader, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = model,
+            imageLoader = loader,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.width(128.dp).height(72.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+            Text(sub, color = Color.Gray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+#### FILE: app/src/main/java/com/smartplayer/app/PlayerActivity.kt
+package com.smartplayer.app
+
+import android.app.PictureInPictureParams
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import android.media.AudioManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.util.Rational
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import com.google.common.util.concurrent.ListenableFuture
+import com.smartplayer.app.data.PlayItem
+import com.smartplayer.app.data.Playlist
+import com.smartplayer.app.data.Prefs
+import com.smartplayer.app.data.fmt
+import com.smartplayer.app.service.PlaybackService
+import com.smartplayer.app.ui.Orange
+import com.smartplayer.app.ui.SmartTheme
+import kotlinx.coroutines.delay
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
+
+class PlayerActivity : ComponentActivity() {
+    private var future: ListenableFuture<MediaController>? = null
+    private var player by mutableStateOf<Player?>(null)
+    var backgroundPlay by mutableStateOf(false)
+    var inPip by mutableStateOf(false)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideBars()
+
+        val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+        val f = MediaController.Builder(this, token).buildAsync()
+        future = f
+        f.addListener({
+            val p = f.get()
+            player = p
+            loadMedia(p)
+        }, ContextCompat.getMainExecutor(this))
+
+        setContent {
+            SmartTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    val p = player
+                    if (p != null) PlayerScreen(p, this@PlayerActivity)
+                }
+            }
+        }
+    }
+
+    private fun hideBars() {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        player?.let { loadMedia(it) }
+    }
+
+    private fun loadMedia(p: Player) {
+        val data: Uri? = intent?.data
+        val items: List<PlayItem>
+        val index: Int
+        if (data != null && intent.action == Intent.ACTION_VIEW) {
+            items = listOf(PlayItem(data.toString(), data.lastPathSegment ?: "Video"))
+            index = 0
+        } else {
+            items = Playlist.items
+            index = Playlist.index.coerceIn(0, (items.size - 1).coerceAtLeast(0))
+        }
+        if (items.isEmpty()) {
+            finish(); return
+        }
+        val current = items[index].uri
+        if (p.currentMediaItem?.mediaId == current && p.mediaItemCount == items.size) {
+            p.play(); return
+        }
+        val mi = items.map {
+            MediaItem.Builder()
+                .setMediaId(it.uri)
+                .setUri(Uri.parse(it.uri))
+                .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(Uri.parse(it.uri)).build())
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(it.title).build())
+                .build()
+        }
+        p.setMediaItems(mi, index, Prefs.getPos(this, current))
+        p.prepare()
+        p.play()
+    }
+
+    fun enterPip() {
+        if (Build.VERSION.SDK_INT >= 26 &&
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            enterPictureInPictureMode(
+                PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+            )
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (player?.isPlaying == true && !backgroundPlay) enterPip()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
+    }
+
+    override fun onStop() {
+        super.onStop()
+        player?.let { p ->
+            p.currentMediaItem?.mediaId?.let { Prefs.savePos(this, it, p.currentPosition, p.duration) }
+            if (!backgroundPlay) p.pause()
+        }
+    }
+
+    override fun onDestroy() {
+        player?.let { p ->
+            if (isFinishing && !backgroundPlay) {
+                p.stop()
+                p.clearMediaItems()
+                stopService(Intent(this, PlaybackService::class.java))
+            }
+        }
+        future?.let { MediaController.releaseFuture(it) }
+        super.onDestroy()
+    }
+}
+
+private class DragState {
+    var mode = 0 // 0 none, 1 seek, 2 brightness, 3 volume
+    var startX = 0f
+    var accX = 0f
+    var accY = 0f
+    var startPos = 0L
+    var target = 0L
+    var bright = 0.5f
+    var vol = 0f
+}
+
+private fun trackLabel(g: Tracks.Group, i: Int): String {
+    val f = g.mediaTrackGroup.getFormat(0)
+    val lang = f.language?.takeIf { it != "und" }?.let { Locale.forLanguageTag(it).displayLanguage }
+    return listOfNotNull(f.label, lang).distinct().joinToString(" · ").ifBlank { "Track ${i + 1}" }
+}
+
+@Composable
+private fun ChoiceDialog(
+    title: String,
+    options: List<Triple<String, Boolean, () -> Unit>>,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text(title) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                options.forEach { (label, selected, action) ->
+                    TextButton(onClick = { action(); onDismiss() }, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            label,
+                            color = if (selected) Orange else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun PlayerScreen(player: Player, act: PlayerActivity) {
+    var controls by remember { mutableStateOf(true) }
+    var locked by remember { mutableStateOf(false) }
+    var resize by remember { mutableIntStateOf(0) }
+    var playing by remember { mutableStateOf(player.isPlaying) }
+    var pos by remember { mutableLongStateOf(player.currentPosition) }
+    var dur by remember { mutableLongStateOf(max(player.duration, 0L)) }
+    var dragPos by remember { mutableStateOf<Float?>(null) }
+    var title by remember { mutableStateOf(player.mediaMetadata.title?.toString() ?: "") }
+    var speed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
+    var tracks by remember { mutableStateOf(player.currentTracks) }
+    var hud by remember { mutableStateOf<String?>(null) }
+    var dialog by remember { mutableIntStateOf(0) } // 1 audio, 2 subtitle, 3 speed
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    var landscape by remember { mutableStateOf(false) }
+
+    val g = remember { DragState() }
+    val am = remember { act.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    val resizeModes = intArrayOf(
+        AspectRatioFrameLayout.RESIZE_MODE_FIT,
+        AspectRatioFrameLayout.RESIZE_MODE_FILL,
+        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    )
+    val resizeNames = listOf("Fit", "Stretch", "Crop")
+
+    DisposableEffect(player) {
+        val l = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                title = mediaItem?.mediaMetadata?.title?.toString() ?: ""
+            }
+            override fun onTracksChanged(t: Tracks) { tracks = t }
+            override fun onPlaybackParametersChanged(p: androidx.media3.common.PlaybackParameters) { speed = p.speed }
+        }
+        player.addListener(l)
+        onDispose { player.removeListener(l) }
+    }
+
+    LaunchedEffect(player) {
+        while (true) {
+            pos = player.currentPosition
+            dur = max(player.duration, 0L)
+            delay(300)
+        }
+    }
+    LaunchedEffect(controls, playing, dragPos) {
+        if (controls && playing && dragPos == null) {
+            delay(3500); controls = false
+        }
+    }
+    LaunchedEffect(hud) {
+        if (hud != null) { delay(900); hud = null }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                    keepScreenOn = true
+                    this.player = player
+                }
+            },
+            update = { it.resizeMode = resizeModes[resize] }
+        )
+
+        // Gesture layer
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onSizeChanged { size = it }
+                .pointerInput(locked) {
+                    detectTapGestures(
+                        onTap = { controls = !controls },
+                        onDoubleTap = { o ->
+                            if (!locked) {
+                                if (o.x < size.width / 2f) {
+                                    player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0)); hud = "-10s"
+                                } else {
+                                    player.seekTo(player.currentPosition + 10_000); hud = "+10s"
+                                }
+                            }
+                        }
+                    )
+                }
+                .pointerInput(locked) {
+                    detectDragGestures(
+                        onDragStart = { o ->
+                            g.mode = 0; g.startX = o.x; g.accX = 0f; g.accY = 0f
+                            g.startPos = player.currentPosition
+                        },
+                        onDragEnd = {
+                            if (g.mode == 1) player.seekTo(g.target)
+                            g.mode = 0
+                        },
+                        onDragCancel = { g.mode = 0 }
+                    ) { change, d ->
+                        if (locked) return@detectDragGestures
+                        change.consume()
+                        g.accX += d.x; g.accY += d.y
+                        if (g.mode == 0 && (abs(g.accX) > 30 || abs(g.accY) > 30)) {
+                            g.mode = if (abs(g.accX) > abs(g.accY)) 1
+                            else if (g.startX < size.width / 2f) 2 else 3
+                            if (g.mode == 2) {
+                                val b = act.window.attributes.screenBrightness
+                                g.bright = if (b < 0) 0.5f else b
+                            }
+                            if (g.mode == 3) g.vol = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                        }
+                        when (g.mode) {
+                            1 -> {
+                                val dd = max(player.duration, 0L)
+                                g.target = (g.startPos + g.accX / size.width * 120_000).toLong().coerceIn(0L, dd)
+                                hud = "${fmt(g.target)} / ${fmt(dd)}"
+                            }
+                            2 -> {
+                                g.bright = (g.bright - d.y / size.height * 1.2f).coerceIn(0.02f, 1f)
+                                val lp = act.window.attributes
+                                lp.screenBrightness = g.bright
+                                act.window.attributes = lp
+                                hud = "Brightness ${(g.bright * 100).toInt()}%"
+                            }
+                            3 -> {
+                                val mx = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                g.vol = (g.vol - d.y / size.height * mx * 1.2f).coerceIn(0f, mx.toFloat())
+                                am.setStreamVolume(AudioManager.STREAM_MUSIC, g.vol.roundToInt(), 0)
+                                hud = "Volume ${(g.vol / mx * 100).toInt()}%"
+                            }
+                        }
+                    }
+                }
+        )
+
+        // HUD
+        hud?.let {
+            Text(
+                it, color = Color.White, fontSize = 20.sp,
+                modifier = Modifier.align(Alignment.Center)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            )
+        }
+
+        // Unlock button
+        AnimatedVisibility(
+            visible = locked && controls,
+            modifier = Modifier.align(Alignment.CenterStart).padding(16.dp),
+            enter = fadeIn(), exit = fadeOut()
+        ) {
+            IconButton(
+                onClick = { locked = false; controls = true },
+                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.6f))
+            ) { Icon(Icons.Filled.Lock, "Unlock", tint = Orange) }
+        }
+
+        // Main controls
+        AnimatedVisibility(
+            visible = controls && !act.inPip && !locked,
+            enter = fadeIn(), exit = fadeOut()
+        ) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
+                // Top bar
+                Row(
+                    Modifier.align(Alignment.TopStart).fillMaxWidth()
+                        .statusBarsPadding().padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { act.finish() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                    }
+                    Text(
+                        title, color = Color.White, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { dialog = 2 }) { Icon(Icons.Filled.Subtitles, "Subtitles", tint = Color.White) }
+                    IconButton(onClick = { dialog = 1 }) { Icon(Icons.Filled.Audiotrack, "Audio", tint = Color.White) }
+                    IconButton(onClick = {
+                        act.backgroundPlay = !act.backgroundPlay
+                        hud = if (act.backgroundPlay) "Background play ON" else "Background play OFF"
+                    }) {
+                        Icon(Icons.Filled.Headset, "Background", tint = if (act.backgroundPlay) Orange else Color.White)
+                    }
+                    IconButton(onClick = { act.enterPip() }) {
+                        Icon(Icons.Filled.PictureInPictureAlt, "PiP", tint = Color.White)
+                    }
+                }
+
+                // Center controls
+                Row(
+                    Modifier.align(Alignment.Center),
+                    horizontalArrangement = Arrangement.spacedBy(28.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { player.seekToPreviousMediaItem() }, enabled = player.hasPreviousMediaItem()) {
+                        Icon(Icons.Filled.SkipPrevious, "Prev", tint = Color.White, modifier = Modifier.size(36.dp))
+                    }
+                    IconButton(
+                        onClick = { if (playing) player.pause() else player.play() },
+                        modifier = Modifier.size(68.dp).clip(RoundedCornerShape(50)).background(Orange)
+                    ) {
+                        Icon(
+                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Play",
+                            tint = Color.Black, modifier = Modifier.size(40.dp)
+                        )
+                    }
+                    IconButton(onClick = { player.seekToNextMediaItem() }, enabled = player.hasNextMediaItem()) {
+                        Icon(Icons.Filled.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(36.dp))
+                    }
+                }
+
+                // Bottom
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(fmt((dragPos ?: pos.toFloat()).toLong()), color = Color.White, fontSize = 13.sp)
+                        Slider(
+                            value = (dragPos ?: pos.toFloat()).coerceIn(0f, max(dur, 1L).toFloat()),
+                            onValueChange = { dragPos = it },
+                            onValueChangeFinished = {
+                                dragPos?.let { player.seekTo(it.toLong()) }
+                                dragPos = null
+                            },
+                            valueRange = 0f..max(dur, 1L).toFloat(),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Orange,
+                                activeTrackColor = Orange,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                        )
+                        Text(fmt(dur), color = Color.White, fontSize = 13.sp)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { locked = true; controls = true }) {
+                            Icon(Icons.Filled.LockOpen, "Lock", tint = Color.White)
+                        }
+                        TextButton(onClick = { dialog = 3 }) {
+                            Text(
+                                if (speed == 1f) "Speed" else "${speed}x",
+                                color = if (speed == 1f) Color.White else Orange, fontSize = 16.sp
+                            )
+                        }
+                        IconButton(onClick = {
+                            resize = (resize + 1) % 3
+                            hud = resizeNames[resize]
+                        }) { Icon(Icons.Filled.AspectRatio, "Aspect", tint = Color.White) }
+                        IconButton(onClick = {
+                            landscape = !landscape
+                            act.requestedOrientation = if (landscape)
+                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        }) { Icon(Icons.Filled.ScreenRotation, "Rotate", tint = Color.White) }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialogs
+    when (dialog) {
+        3 -> ChoiceDialog(
+            "Playback speed",
+            listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f).map { s ->
+                Triple("${s}x", s == speed) { player.setPlaybackSpeed(s) }
+            }
+        ) { dialog = 0 }
+
+        1 -> {
+            val groups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO && it.isSupported }
+            val opts = if (groups.isEmpty()) listOf(Triple("No audio tracks", false) {})
+            else groups.mapIndexed { i, grp ->
+                Triple(trackLabel(grp, i), grp.isSelected) {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setOverrideForType(TrackSelectionOverride(grp.mediaTrackGroup, 0)).build()
+                }
+            }
+            ChoiceDialog("Audio track", opts) { dialog = 0 }
+        }
+
+        2 -> {
+            val groups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
+            val off = Triple("Off", groups.none { it.isSelected }) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+            }
+            val opts = listOf(off) + groups.mapIndexed { i, grp ->
+                Triple(trackLabel(grp, i), grp.isSelected) {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .setOverrideForType(TrackSelectionOverride(grp.mediaTrackGroup, 0)).build()
+                }
+            }
+            ChoiceDialog("Subtitles", opts) { dialog = 0 }
+        }
+    }
+}
